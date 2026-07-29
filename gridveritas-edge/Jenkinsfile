@@ -1,0 +1,26 @@
+// GridVeritas Edge Agent – build Docker image
+pipeline {
+    agent any
+    environment {
+        IMAGE_NAME = 'gridveritas/edge'
+        IMAGE_TAG  = "${env.BUILD_NUMBER ?: 'local'}"
+    }
+    options {
+        timestamps()
+        buildDiscarder(logRotator(numToKeepStr: '15'))
+    }
+    stages {
+        stage('Checkout') { steps { checkout scm } }
+        stage('Docker Build') {
+            steps {
+                sh """
+                    docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -t ${IMAGE_NAME}:latest -f Dockerfile .
+                """
+            }
+        }
+    }
+    post {
+        success { echo "Image ${IMAGE_NAME}:${IMAGE_TAG} ready" }
+        failure { echo "Edge agent build failed" }
+    }
+}

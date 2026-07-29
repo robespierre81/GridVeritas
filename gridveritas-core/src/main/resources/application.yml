@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: gridveritas-core
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/gridveritas
+    username: gridveritas
+    password: gridveritas
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update          # convenient for MVP; change to validate later
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+    show-sql: false
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+
+logging:
+  level:
+    com.gridveritas: INFO
+    org.springframework.web: INFO

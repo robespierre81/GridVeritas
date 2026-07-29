@@ -1,0 +1,126 @@
+// ============================================================
+// GridVeritas Core – Jenkins Pipeline (v5)
+// Every stage resolves the portable Maven path itself
+// ============================================================
+
+pipeline {
+    agent any
+
+    environment {
+        APP_NAME      = 'gridveritas-core'
+        IMAGE_NAME    = 'gridveritas/core'
+        IMAGE_TAG     = "${env.BUILD_NUMBER ?: 'local'}"
+        MAVEN_VERSION = '3.9.9'
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        timestamps()
+        disableConcurrentBuilds()
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                echo "Checking out source for ${APP_NAME}..."
+                checkout scm
+            }
+        }
+
+        stage('Prepare Maven') {
+            steps {
+                echo "Preparing portable Maven ${MAVEN_VERSION}..."
+                sh '''
+                    set -e
+                    java -version
+
+                    MVN_DIR="${WORKSPACE}/tools/apache-maven-${MAVEN_VERSION}"
+                    mkdir -p "${WORKSPACE}/tools"
+
+                    if [ ! -x "${MVN_DIR}/bin/mvn" ]; then
+                        echo "Downloading Apache Maven ${MAVEN_VERSION}..."
+                        curl -fsSL \
+                          "https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz" \
+                          -o "${WORKSPACE}/tools/maven.tgz"
+                        tar -xzf "${WORKSPACE}/tools/maven.tgz" -C "${WORKSPACE}/tools"
+                        rm -f "${WORKSPACE}/tools/maven.tgz"
+                        echo "Maven downloaded."
+                    else
+                        echo "Portable Maven already present."
+                    fi
+
+                    "${MVN_DIR}/bin/mvn" -version
+                '''
+            }
+        }
+
+        stage('Build') {
+            steps {
+                echo "Building ${APP_NAME}..."
+                sh '''
+                    set -e
+                    MVN="${WORKSPACE}/tools/apache-maven-${MAVEN_VERSION}/bin/mvn"
+                    if [ ! -x "$MVN" ]; then
+                        echo "ERROR: Maven not found at $MVN"
+                        ls -la "${WORKSPACE}/tools/" || true
+                        exit 1
+                    fi
+                    "$MVN" -B -DskipTests clean package
+                '''
+            }
+        }
+
+        stage('Unit Tests') {
+            steps {
+                echo "Running unit tests..."
+                sh '''
+                    set -e
+                    MVN="${WORKSPACE}/tools/apache-maven-${MAVEN_VERSION}/bin/mvn"
+                    if [ ! -x "$MVN" ]; then
+                        echo "ERROR: Maven not found at $MVN"
+                        exit 1
+                    fi
+                    "$MVN" -B test
+                '''
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
+                }
+            }
+        }
+
+        stage('Package (Docker)') {
+            steps {
+                echo "Building Docker image ${IMAGE_NAME}:${IMAGE_TAG}..."
+                sh """
+                    set -e
+                    docker build \\
+                        -t ${IMAGE_NAME}:${IMAGE_TAG} \\
+                        -t ${IMAGE_NAME}:latest \\
+                        -f Dockerfile .
+                """
+            }
+        }
+
+        stage('Archive Artifacts') {
+            steps {
+                echo "Archiving JAR..."
+                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true, allowEmptyArchive: true
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Pipeline succeeded – image ${IMAGE_NAME}:${IMAGE_TAG} is ready."
+        }
+        failure {
+            echo "Pipeline failed. Check the logs above."
+        }
+        always {
+            echo "Build finished with status: ${currentBuild.currentResult}"
+        }
+    }
+}

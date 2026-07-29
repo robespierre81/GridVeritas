@@ -1,0 +1,116 @@
+# ============================================================
+# GridVeritas – isolated Docker Compose stack
+# Own network: gridveritas-net (no clash with other containers)
+# ============================================================
+#
+# Usage:
+#   docker compose up -d --build
+#   docker compose down
+#   docker compose down -v   # also remove DB volume
+#
+# UI:   http://localhost:3080
+# API:  http://localhost:18080/api/v1/...  (optional direct access)
+# ============================================================
+
+name: gridveritas
+
+services:
+
+  # ---------- PostgreSQL ----------
+  postgres:
+    image: postgres:16-alpine
+    container_name: gridveritas-postgres
+    environment:
+      POSTGRES_DB: gridveritas
+      POSTGRES_USER: gridveritas
+      POSTGRES_PASSWORD: gridveritas
+    volumes:
+      - gridveritas-pgdata:/var/lib/postgresql/data
+    networks:
+      - gridveritas-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gridveritas -d gridveritas"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Not published on host by default – only reachable inside gridveritas-net
+    # Uncomment the next lines if you need host access (e.g. for debugging):
+    # ports:
+    #   - "15432:5432"
+    restart: unless-stopped
+
+  # ---------- Core (Spring Boot) ----------
+  core:
+    build:
+      context: ./gridveritas-core
+      dockerfile: Dockerfile
+    image: gridveritas/core:local
+    container_name: gridveritas-core
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/gridveritas
+      SPRING_DATASOURCE_USERNAME: gridveritas
+      SPRING_DATASOURCE_PASSWORD: gridveritas
+      JAVA_OPTS: "-Xms256m -Xmx512m"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - gridveritas-net
+    ports:
+      # Host port 18080 → container 8080 (avoids conflict with other apps on 8080)
+      - "18080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    restart: unless-stopped
+
+  # ---------- UI (React + nginx) ----------
+  ui:
+    build:
+      context: ./gridveritas-ui
+      dockerfile: Dockerfile
+    image: gridveritas/ui:local
+    container_name: gridveritas-ui
+    depends_on:
+      core:
+        condition: service_healthy
+    networks:
+      - gridveritas-net
+    ports:
+      # Host port 3080 → container 80 (avoids conflict with host :80 / :3000)
+      - "3080:80"
+    restart: unless-stopped
+
+  # ---------- Edge agent (optional: docker compose --profile edge up -d) ----------
+  edge:
+    build:
+      context: ./gridveritas-edge
+      dockerfile: Dockerfile
+    image: gridveritas/edge:local
+    container_name: gridveritas-edge
+    profiles: ["edge"]
+    environment:
+      GRIDVERITAS_CORE_URL: http://gridveritas-core:8080
+      GRIDVERITAS_AGENT_NAME: edge-agent-01
+      GRIDVERITAS_INTERVAL: 15s
+    depends_on:
+      core:
+        condition: service_healthy
+    networks:
+      - gridveritas-net
+    restart: unless-stopped
+
+
+networks:
+  gridveritas-net:
+    name: gridveritas-net
+    driver: bridge
+    # Internal-only would block host access to published ports – keep default bridge
+    # so published ports work, while all service-to-service traffic stays on this network.
+
+volumes:
+  gridveritas-pgdata:
+    name: gridveritas-pgdata

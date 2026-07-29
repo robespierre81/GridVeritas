@@ -1,0 +1,47 @@
+:root {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  line-height: 1.5;
+  color: #1a1a2e;
+  background: #f4f6f9;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { min-height: 100vh; }
+a { color: #1F4E79; text-decoration: none; }
+a:hover { text-decoration: underline; }
+button, .btn {
+  background: #1F4E79; color: #fff; border: none;
+  padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.95rem;
+}
+button:hover, .btn:hover { background: #163a5f; }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
+input, select, textarea {
+  width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #c5cdd8;
+  border-radius: 6px; font-size: 0.95rem;
+}
+label { display: block; font-weight: 600; margin-bottom: 0.25rem; font-size: 0.9rem; }
+.card {
+  background: #fff; border-radius: 10px; padding: 1.25rem 1.5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 1rem;
+}
+.table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.table th, .table td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid #e8ecf1; }
+.table th { background: #f0f3f7; font-weight: 600; }
+.badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; }
+.badge-ok { background: #d4edda; color: #155724; }
+.badge-fail { background: #f8d7da; color: #721c24; }
+.badge-info { background: #d1ecf1; color: #0c5460; }
+.form-row { margin-bottom: 1rem; }
+.msg { margin-top: 0.75rem; padding: 0.6rem 0.9rem; border-radius: 6px; }
+.msg-ok { background: #d4edda; color: #155724; }
+.msg-err { background: #f8d7da; color: #721c24; }
+.layout { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 220px; background: #1F4E79; color: #fff; padding: 1.5rem 1rem; flex-shrink: 0;
+}
+.sidebar h1 { font-size: 1.2rem; margin-bottom: 1.5rem; }
+.sidebar nav a {
+  display: block; color: #c5d8ec; padding: 0.5rem 0.75rem; border-radius: 6px; margin-bottom: 0.25rem;
+}
+.sidebar nav a:hover, .sidebar nav a.active { background: #163a5f; color: #fff; text-decoration: none; }
+.main { flex: 1; padding: 1.5rem 2rem; }
+.main h2 { margin-bottom: 1rem; color: #1F4E79; }

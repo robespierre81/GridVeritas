@@ -1,0 +1,13 @@
+target/
+.idea/
+*.iml
+.nb-gradle/
+.classpath
+.project
+.settings/
+.DS_Store
+*.log
+*.swp
+.vscode/
+.env
+*.class

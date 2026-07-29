@@ -1,0 +1,62 @@
+// ============================================================
+// GridVeritas UI – Jenkins Pipeline
+// Builds React app and Docker image
+// ============================================================
+
+pipeline {
+    agent any
+
+    environment {
+        APP_NAME   = 'gridveritas-ui'
+        IMAGE_NAME = 'gridveritas/ui'
+        IMAGE_TAG  = "${env.BUILD_NUMBER ?: 'local'}"
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        timestamps()
+        disableConcurrentBuilds()
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                echo "Checking out ${APP_NAME}..."
+                checkout scm
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                echo "Building Docker image ${IMAGE_NAME}:${IMAGE_TAG}..."
+                // Multi-stage Dockerfile runs npm install + npm run build inside the image
+                sh """
+                    set -e
+                    docker build \\
+                        -t ${IMAGE_NAME}:${IMAGE_TAG} \\
+                        -t ${IMAGE_NAME}:latest \\
+                        -f Dockerfile .
+                """
+            }
+        }
+
+        stage('Archive (optional)') {
+            steps {
+                echo "Docker image built: ${IMAGE_NAME}:${IMAGE_TAG}"
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Pipeline succeeded – image ${IMAGE_NAME}:${IMAGE_TAG} is ready."
+        }
+        failure {
+            echo "Pipeline failed. Check the logs above."
+        }
+        always {
+            echo "Build finished with status: ${currentBuild.currentResult}"
+        }
+    }
+}
