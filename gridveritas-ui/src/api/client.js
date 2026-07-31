@@ -1,12 +1,22 @@
+import { getReadKey, getToken } from './auth'
+
 const API_BASE = import.meta.env.VITE_API_BASE || '/gridveritas/api/v1'
 
 async function request(path, options = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-    ...options
-  })
+  const headers = {
+    'Content-Type': 'application/json',
+    'X-Read-Key': getReadKey(),
+    ...options.headers
+  }
+  const token = getToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers })
   if (!res.ok) {
     const text = await res.text()
+    if (res.status === 401) throw new Error('Unauthorized — a read key or login is required.')
+    if (res.status === 403) throw new Error('Forbidden — this action needs an admin login.')
+    if (res.status === 429) throw new Error('Rate limit exceeded — please retry shortly.')
     throw new Error(text || `HTTP ${res.status}`)
   }
   if (res.status === 204) return null
@@ -19,6 +29,10 @@ export const api = {
   listAttestations: (sourceId) => request(`/attestations?sourceId=${sourceId}`),
   getAttestation: (id) => request(`/attestations/${id}`),
   createAttestation: (body) => request('/attestations', { method: 'POST', body: JSON.stringify(body) }),
+  getProof: (id) => request(`/attestations/${id}/proof`),
   verify: (payloadHash) => request('/verify', { method: 'POST', body: JSON.stringify({ payloadHash }) }),
-  audit: () => request('/audit')
+  listAnomalies: (sourceId) => request(sourceId ? `/anomalies?sourceId=${sourceId}` : '/anomalies'),
+  askAudit: (question) => request('/audit/ask', { method: 'POST', body: JSON.stringify({ question }) }),
+  listAuditLog: () => request('/audit'),
+  listVerifications: () => request('/audit/verifications')
 }

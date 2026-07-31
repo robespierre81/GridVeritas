@@ -1,0 +1,39 @@
+# mTLS overlay for the agent<->core ingest path.
+#
+# Prereq: generate certs once:  ./certs/gen-certs.sh
+# Run:    docker compose -f docker-compose.yml -f docker-compose.mtls.yml up -d --build
+#         docker compose -f docker-compose.yml -f docker-compose.mtls.yml --profile edge up -d --build edge
+#
+# The core serves HTTPS on 8443 with client-auth: want; ingest requires a client
+# certificate (mTLS). Reads/UI still use TLS + read key / JWT (no client cert).
+
+services:
+  core:
+    environment:
+      SERVER_PORT: "8443"
+      SSL_ENABLED: "true"
+      SSL_KEYSTORE: file:/certs/core-keystore.p12
+      SSL_KEYSTORE_PASSWORD: ${KS_PASS:-changeit}
+      SSL_TRUSTSTORE: file:/certs/truststore.p12
+      SSL_TRUSTSTORE_PASSWORD: ${TS_PASS:-changeit}
+      SSL_CLIENT_AUTH: want
+      MTLS_REQUIRE_INGEST: "true"
+    volumes:
+      - ./certs/out:/certs:ro
+    ports:
+      - "18443:8443"
+    healthcheck:
+      test: ["CMD", "curl", "-fk", "https://localhost:8443/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  edge:
+    environment:
+      GRIDVERITAS_CORE_URL: https://gridveritas-core:8443
+      GRIDVERITAS_TLS_CLIENT_CERT: /certs/agent.crt
+      GRIDVERITAS_TLS_CLIENT_KEY: /certs/agent.key
+      GRIDVERITAS_TLS_CA: /certs/ca.crt
+    volumes:
+      - ./certs/out:/certs:ro

@@ -31,7 +31,7 @@ export default function AttestationsPage() {
       await api.createAttestation({
         sourceId,
         payloadHash,
-        timestamp: new Date().toISOString(),
+        timestampEpochMillis: Date.now(),
         sequenceNr: Number(sequenceNr),
         signature
       })

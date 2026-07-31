@@ -1,9 +1,16 @@
 package com.gridveritas.core.web;
 
+import com.gridveritas.core.domain.AuditLog;
 import com.gridveritas.core.domain.Source;
+import com.gridveritas.core.domain.VerificationEvent;
+import com.gridveritas.core.repository.AuditLogRepository;
+import com.gridveritas.core.repository.VerificationEventRepository;
 import com.gridveritas.core.service.AttestationService;
+import com.gridveritas.core.service.AuditService;
+import com.gridveritas.core.service.MerkleService;
 import com.gridveritas.core.web.dto.AttestationRequest;
 import com.gridveritas.core.web.dto.AttestationResponse;
+import com.gridveritas.core.web.dto.ProofResponse;
 import com.gridveritas.core.web.dto.VerifyRequest;
 import com.gridveritas.core.web.dto.VerifyResponse;
 import jakarta.validation.Valid;
@@ -20,14 +27,24 @@ import java.util.UUID;
 public class AttestationController {
 
     private final AttestationService attestationService;
+    private final MerkleService merkleService;
+    private final AuditService auditService;
+    private final VerificationEventRepository verificationRepo;
+    private final AuditLogRepository auditRepo;
 
-    public AttestationController(AttestationService attestationService) {
+    public AttestationController(AttestationService attestationService,
+                                 MerkleService merkleService,
+                                 AuditService auditService,
+                                 VerificationEventRepository verificationRepo,
+                                 AuditLogRepository auditRepo) {
         this.attestationService = attestationService;
+        this.merkleService = merkleService;
+        this.auditService = auditService;
+        this.verificationRepo = verificationRepo;
+        this.auditRepo = auditRepo;
     }
 
-    // ------------------------------------------------------------------
-    // Attestations
-    // ------------------------------------------------------------------
+    // ------------------------------------------------------------------ Attestations
 
     @PostMapping("/attestations")
     public ResponseEntity<AttestationResponse> createAttestation(
@@ -46,45 +63,51 @@ public class AttestationController {
         return attestationService.listBySource(sourceId);
     }
 
-    // ------------------------------------------------------------------
-    // Verify
-    // ------------------------------------------------------------------
+    @GetMapping("/attestations/{id}/proof")
+    public ProofResponse getProof(@PathVariable UUID id) {
+        ProofResponse proof = merkleService.buildProof(id);
+        auditService.recordVerification("PROOF", id.toString(), proof.getStatus(),
+                proof.isAnchored() ? "anchored=true" : "anchored=false");
+        return proof;
+    }
+
+    // ------------------------------------------------------------------ Verify
 
     @PostMapping("/verify")
     public VerifyResponse verify(@Valid @RequestBody VerifyRequest request) {
-        return attestationService.verify(request);
+        VerifyResponse result = attestationService.verify(request);
+        auditService.recordVerification("VERIFY", request.getPayloadHash(),
+                result.isValid() ? "VALID" : "INVALID_OR_NOT_FOUND", result.getMessage());
+        return result;
     }
 
-    // ------------------------------------------------------------------
-    // Sources
-    // ------------------------------------------------------------------
+    // ------------------------------------------------------------------ Sources
 
     @GetMapping("/sources")
     public List<Source> listSources() {
         return attestationService.listSources();
     }
 
-    /**
-     * Simple helper endpoint to create a source during early development.
-     * In production this will be replaced by a proper registration flow.
-     */
     @PostMapping("/sources")
     public ResponseEntity<Source> createSource(@RequestBody Map<String, String> body) {
         String name = body.getOrDefault("name", "unnamed-source");
         String publicKey = body.getOrDefault("publicKey", "");
         Source created = attestationService.createSource(name, publicKey);
+        auditService.recordAudit("SOURCE_CREATED", created.getId().toString(), "name=" + name);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
-    // ------------------------------------------------------------------
-    // Audit (minimal placeholder)
-    // ------------------------------------------------------------------
+    // ------------------------------------------------------------------ Audit trail
 
+    /** Recent security/configuration events. */
     @GetMapping("/audit")
-    public Map<String, String> auditPlaceholder() {
-        return Map.of(
-                "message", "Audit endpoint placeholder – will return verification and configuration events",
-                "status", "MVP"
-        );
+    public List<AuditLog> audit() {
+        return auditRepo.findTop100ByOrderByCreatedAtDesc();
+    }
+
+    /** Recent verification events (who verified what, and the result). */
+    @GetMapping("/audit/verifications")
+    public List<VerificationEvent> verifications() {
+        return verificationRepo.findTop100ByOrderByCreatedAtDesc();
     }
 }

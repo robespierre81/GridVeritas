@@ -1,0 +1,30 @@
+# Test profile: isolate tests from Postgres/Flyway and provide security config
+# so the application context can start.
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+  flyway:
+    enabled: false
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        format_sql: false
+    show-sql: false
+
+gridveritas:
+  ai:
+    ollama:
+      enabled: false
+  security:
+    jwt:
+      secret: test-secret-value-for-context-loading-only
+      ttl-minutes: 30
+    read-key: test-read-key
+    users:
+      admin-password: test-admin
+      ingest-password: test-ingest

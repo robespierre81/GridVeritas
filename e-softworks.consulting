@@ -1,0 +1,127 @@
+server {
+    listen 80;
+    server_name e-softworks.consulting www.e-softworks.consulting;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name e-softworks.consulting www.e-softworks.consulting;
+
+    ssl_certificate /etc/letsencrypt/live/e-softworks.consulting/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/e-softworks.consulting/privkey.pem;
+
+    # =============================================
+    # 1. Cheetah API → Backend (Port 31987)
+    # =============================================
+    location /cheetah-api {
+        proxy_pass http://127.0.0.1:31987;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_redirect off;
+
+        # Minimal headers - no complex if statements
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+        add_header 'Access-Control-Allow-Headers' '*' always;
+    }
+
+    # =============================================
+    # 2. Cheetah Frontend → Frontend (Port 31989)
+    # =============================================
+    location /cheetah {
+        proxy_pass http://127.0.0.1:31989/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # =============================================
+    # 3. Andere Apps (bestehende)
+    # =============================================
+    location / {
+        proxy_pass http://127.0.0.1:31984/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Port 443;
+        proxy_set_header X-Forwarded-Scheme https;
+        proxy_redirect off;
+    }
+
+    location /erp {
+        proxy_pass http://127.0.0.1:31985/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Port 443;
+        proxy_set_header X-Forwarded-Scheme https;
+        proxy_redirect off;
+    }
+
+    location /diva {
+        proxy_pass http://127.0.0.1:31983/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Port 443;
+        proxy_set_header X-Forwarded-Scheme https;
+        proxy_redirect off;
+    }
+
+    location /dailyaiwizard/ {
+        proxy_pass http://localhost:31980/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+                
+	proxy_buffering off;
+        proxy_redirect off;
+    }
+
+    location /dailyaiwizard/api {
+        proxy_pass http://127.0.0.1:31979/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+	proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Prefix /dailyaiwizard;
+        proxy_buffering off;
+        proxy_redirect off;
+	proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_http_version 1.1;
+    }
+
+    location /gridveritas {
+        proxy_pass http://127.0.0.1:3080/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Prefix /dailyaiwizard;
+        proxy_buffering off;
+        proxy_redirect off;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_http_version 1.1;
+    }
+
+    location /gridveritas/api/ {
+        proxy_pass http://127.0.0.1:18080/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

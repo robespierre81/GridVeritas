@@ -2,25 +2,33 @@ import { NavLink, Routes, Route } from 'react-router-dom'
 import SourcesPage from './pages/SourcesPage'
 import AttestationsPage from './pages/AttestationsPage'
 import VerifyPage from './pages/VerifyPage'
+import AnomaliesPage from './pages/AnomaliesPage'
 import AuditPage from './pages/AuditPage'
+import AuditTrailPage from './pages/AuditTrailPage'
+import LoginPanel from './components/LoginPanel'
 
 export default function App() {
   return (
     <div className="layout">
-      <aside className="sidebar">
+      <aside className="sidebar" style={{ display: 'flex', flexDirection: 'column' }}>
         <h1>GridVeritas</h1>
         <nav>
           <NavLink to="/" end>Sources</NavLink>
           <NavLink to="/attestations">Attestations</NavLink>
           <NavLink to="/verify">Verify</NavLink>
-          <NavLink to="/audit">Audit</NavLink>
+          <NavLink to="/anomalies">Anomalies</NavLink>
+          <NavLink to="/audit-trail">Audit Trail</NavLink>
+          <NavLink to="/audit">Audit Assistant</NavLink>
         </nav>
+        <LoginPanel />
       </aside>
       <main className="main">
         <Routes>
           <Route path="/" element={<SourcesPage />} />
           <Route path="/attestations" element={<AttestationsPage />} />
           <Route path="/verify" element={<VerifyPage />} />
+          <Route path="/anomalies" element={<AnomaliesPage />} />
+          <Route path="/audit-trail" element={<AuditTrailPage />} />
           <Route path="/audit" element={<AuditPage />} />
         </Routes>
       </main>

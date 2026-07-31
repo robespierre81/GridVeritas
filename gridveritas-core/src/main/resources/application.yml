@@ -3,14 +3,24 @@ spring:
     name: gridveritas-core
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/gridveritas
-    username: gridveritas
-    password: gridveritas
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/gridveritas}
+    # Runtime role. For enforced append-only, set DB_APP_USER=gridveritas_app
+    # (a non-owner role from db/roles/append_only_role.sql).
+    username: ${DB_APP_USER:gridveritas}
+    password: ${DB_APP_PASSWORD:gridveritas}
     driver-class-name: org.postgresql.Driver
+
+  flyway:
+    enabled: true
+    # Migrations run as the table OWNER (full DDL). Defaults to the app user for a
+    # single-user setup; set DB_OWNER_USER to split owner vs. app role.
+    user: ${DB_OWNER_USER:${DB_APP_USER:gridveritas}}
+    password: ${DB_OWNER_PASSWORD:${DB_APP_PASSWORD:gridveritas}}
+    baseline-on-migrate: false      # start from a clean database (see notes)
 
   jpa:
     hibernate:
-      ddl-auto: update          # convenient for MVP; change to validate later
+      ddl-auto: validate            # Flyway owns the schema; Hibernate only validates
     open-in-view: false
     properties:
       hibernate:
@@ -21,8 +31,61 @@ spring:
     serialization:
       write-dates-as-timestamps: false
 
+gridveritas:
+  merkle:
+    seal-interval-ms: ${MERKLE_SEAL_INTERVAL_MS:60000}
+    max-batch: ${MERKLE_MAX_BATCH:1000}
+  anchor:
+    # Public RFC 3161 TSA. freeTSA is a general-purpose free service; confirm its
+    # terms, or switch to an accredited/internal TSA a regulated partner accepts.
+    tsa-url: ${ANCHOR_TSA_URL:https://freetsa.org/tsr}
+    tsa-timeout-ms: ${ANCHOR_TSA_TIMEOUT_MS:10000}
+    interval-ms: ${ANCHOR_INTERVAL_MS:120000}
+    max-batch: ${ANCHOR_MAX_BATCH:50}
+    # Path or classpath: to the TSA CA certificate (PEM/DER) for trust-pinning.
+    # Empty = integrity verification only (signature checked, not trust-pinned).
+    tsa-trust-cert: ${ANCHOR_TSA_TRUST_CERT:}
+  anomaly:
+    interval-ms: ${ANOMALY_INTERVAL_MS:60000}
+    lookback-hours: ${ANOMALY_LOOKBACK_HOURS:24}
+    min-samples: ${ANOMALY_MIN_SAMPLES:5}
+    invalid-ratio-threshold: ${ANOMALY_INVALID_RATIO:0.2}
+    silence-threshold-ms: ${ANOMALY_SILENCE_MS:300000}
+  ai:
+    ollama:
+      enabled: ${OLLAMA_ENABLED:true}
+      url: ${OLLAMA_URL:http://localhost:11434}
+      model: ${OLLAMA_MODEL:llama3.2:1b}
+      temperature: ${OLLAMA_TEMPERATURE:0.2}
+      timeout-ms: ${OLLAMA_TIMEOUT_MS:60000}
+  security:
+    jwt:
+      secret: ${JWT_SECRET:dev-only-change-me-to-a-long-random-secret}
+      ttl-minutes: ${JWT_TTL_MINUTES:120}
+    read-key: ${READ_KEY:dev-read-key-change-me}
+    users:
+      admin-password: ${ADMIN_PASSWORD:admin-change-me}
+      ingest-password: ${INGEST_PASSWORD:ingest-change-me}
+    max-body-bytes: ${MAX_BODY_BYTES:262144}
+    rate-limit:
+      enabled: ${RATE_LIMIT_ENABLED:true}
+      general-per-minute: ${RATE_LIMIT_GENERAL:240}
+      auth-per-minute: ${RATE_LIMIT_AUTH:15}
+      max-keys: ${RATE_LIMIT_MAX_KEYS:100000}
+    mtls:
+      require-for-ingest: ${MTLS_REQUIRE_INGEST:false}
+
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
+  ssl:
+    enabled: ${SSL_ENABLED:false}
+    key-store: ${SSL_KEYSTORE:}
+    key-store-password: ${SSL_KEYSTORE_PASSWORD:}
+    key-store-type: PKCS12
+    trust-store: ${SSL_TRUSTSTORE:}
+    trust-store-password: ${SSL_TRUSTSTORE_PASSWORD:}
+    trust-store-type: PKCS12
+    client-auth: ${SSL_CLIENT_AUTH:want}
 
 management:
   endpoints:

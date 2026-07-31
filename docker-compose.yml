@@ -6,10 +6,10 @@
 # Usage:
 #   docker compose up -d --build
 #   docker compose down
-#   docker compose down -v   # also remove DB volume
+#   docker compose down -v   # also remove DB + Ollama volumes
 #
 # UI:   http://localhost:3080
-# API:  http://localhost:18080/api/v1/...  (optional direct access)
+# API:  http://localhost:18080/api/v1/...
 # ============================================================
 
 name: gridveritas
@@ -24,8 +24,11 @@ services:
       POSTGRES_DB: gridveritas
       POSTGRES_USER: gridveritas
       POSTGRES_PASSWORD: gridveritas
+      # password for the limited runtime role created on first init
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-app-change-me}
     volumes:
       - gridveritas-pgdata:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d:ro
     networks:
       - gridveritas-net
     healthcheck:
@@ -33,11 +36,42 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-    # Not published on host by default – only reachable inside gridveritas-net
-    # Uncomment the next lines if you need host access (e.g. for debugging):
-    # ports:
-    #   - "15432:5432"
     restart: unless-stopped
+
+  # ---------- Ollama (local LLM server for the audit assistant) ----------
+  ollama:
+    image: ollama/ollama:latest
+    container_name: gridveritas-ollama
+    environment:
+      # Keep the model in RAM only briefly after a query, so it does not sit
+      # resident permanently on an 8 GiB host.
+      OLLAMA_KEEP_ALIVE: "60s"
+    volumes:
+      - gridveritas-ollama:/root/.ollama
+    networks:
+      - gridveritas-net
+    # mem_limit: 4g   # uncomment to cap; a 1B model needs ~1.5 GiB while loaded
+    restart: unless-stopped
+
+  # ---------- One-shot: pull the model, then exit ----------
+  ollama-pull:
+    image: ollama/ollama:latest
+    container_name: gridveritas-ollama-pull
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://gridveritas-ollama:11434
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "waiting for ollama server...";
+        until ollama list >/dev/null 2>&1; do sleep 2; done;
+        echo "pulling ${OLLAMA_MODEL:-llama3.2:1b}...";
+        ollama pull ${OLLAMA_MODEL:-llama3.2:1b};
+        echo "model ready.";
+    networks:
+      - gridveritas-net
+    restart: "no"
 
   # ---------- Core (Spring Boot) ----------
   core:
@@ -48,8 +82,19 @@ services:
     container_name: gridveritas-core
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/gridveritas
-      SPRING_DATASOURCE_USERNAME: gridveritas
-      SPRING_DATASOURCE_PASSWORD: gridveritas
+      # runtime: limited, append-only-enforced role
+      SPRING_DATASOURCE_USERNAME: gridveritas_app
+      SPRING_DATASOURCE_PASSWORD: ${APP_DB_PASSWORD:-app-change-me}
+      # migrations: run as the table owner (full DDL)
+      SPRING_FLYWAY_USER: gridveritas
+      SPRING_FLYWAY_PASSWORD: gridveritas
+      OLLAMA_URL: http://gridveritas-ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:1b}
+      # --- M8 security (change these for anything beyond local dev) ---
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-to-a-long-random-secret}
+      READ_KEY: ${READ_KEY:-dev-read-key-change-me}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin-change-me}
+      INGEST_PASSWORD: ${INGEST_PASSWORD:-ingest-change-me}
       JAVA_OPTS: "-Xms256m -Xmx512m"
     depends_on:
       postgres:
@@ -57,7 +102,6 @@ services:
     networks:
       - gridveritas-net
     ports:
-      # Host port 18080 → container 8080 (avoids conflict with other apps on 8080)
       - "18080:8080"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
@@ -80,7 +124,6 @@ services:
     networks:
       - gridveritas-net
     ports:
-      # Host port 3080 → container 80 (avoids conflict with host :80 / :3000)
       - "3080:80"
     restart: unless-stopped
 
@@ -96,6 +139,10 @@ services:
       GRIDVERITAS_CORE_URL: http://gridveritas-core:8080
       GRIDVERITAS_AGENT_NAME: edge-agent-01
       GRIDVERITAS_INTERVAL: 15s
+      # dev: admin creds let the agent register its source AND ingest.
+      # prod: use ingest creds + a pre-provisioned GRIDVERITAS_SOURCE_ID.
+      GRIDVERITAS_AUTH_USER: admin
+      GRIDVERITAS_AUTH_PASSWORD: ${ADMIN_PASSWORD:-admin-change-me}
     depends_on:
       core:
         condition: service_healthy
@@ -108,9 +155,9 @@ networks:
   gridveritas-net:
     name: gridveritas-net
     driver: bridge
-    # Internal-only would block host access to published ports – keep default bridge
-    # so published ports work, while all service-to-service traffic stays on this network.
 
 volumes:
   gridveritas-pgdata:
     name: gridveritas-pgdata
+  gridveritas-ollama:
+    name: gridveritas-ollama

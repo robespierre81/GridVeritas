@@ -63,7 +63,9 @@ pipeline {
                 echo "Starting isolated stack on gridveritas-net..."
                 sh '''
                     set -e
-                    docker compose up -d --remove-orphans
+                    # Schema ist jetzt Flyway-verwaltet: DB-Volume verwerfen, damit Flyway ab V1 baut
+                    docker compose down -v --remove-orphans || true
+                    docker compose up -d --build --remove-orphans
                     docker compose ps
                 '''
             }

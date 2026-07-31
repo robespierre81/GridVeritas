@@ -1,6 +1,7 @@
 package com.gridveritas.core.service;
 
 import com.gridveritas.core.crypto.Ed25519Verifier;
+import com.gridveritas.core.crypto.MerkleTree;
 import com.gridveritas.core.domain.Attestation;
 import com.gridveritas.core.domain.Source;
 import com.gridveritas.core.repository.AttestationRepository;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -32,8 +34,14 @@ public class AttestationService {
     }
 
     /**
-     * Ingest attestation and cryptographically verify the Ed25519 signature
-     * against the source public key (same contract as the Go edge agent).
+     * Ingest an attestation:
+     * - reject a duplicate (source, sequence) as a replay (409),
+     * - verify the Ed25519 signature over the canonical message
+     *   (payload hash + source id + sequence + timestamp),
+     * - store the Merkle leaf hash = SHA-256(0x00 || canonical message).
+     *
+     * The DB constraint uq_attestation_source_seq is the hard backstop; this
+     * pre-check gives a clean 409 on the normal (single-writer) path.
      */
     @Transactional
     public AttestationResponse create(AttestationRequest request) {
@@ -41,20 +49,32 @@ public class AttestationService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Source not found: " + request.getSourceId()));
 
-        boolean signatureOk = Ed25519Verifier.verify(
-                source.getPublicKey(),
-                request.getPayloadHash(),
-                request.getSignature()
+        if (attestationRepository.existsBySourceIdAndSequenceNr(source.getId(), request.getSequenceNr())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Duplicate attestation: sequence " + request.getSequenceNr()
+                            + " already exists for this source (replay rejected)");
+        }
+
+        byte[] message = canonicalMessage(
+                source.getId().toString(),
+                request.getSequenceNr(),
+                request.getTimestampEpochMillis(),
+                request.getPayloadHash()
         );
+        boolean signatureOk = message != null
+                && Ed25519Verifier.verify(source.getPublicKey(), message, request.getSignature());
 
         Attestation attestation = new Attestation(
                 source,
                 request.getPayloadHash(),
-                request.getTimestamp(),
+                Instant.ofEpochMilli(request.getTimestampEpochMillis()),
                 request.getSequenceNr(),
                 request.getSignature()
         );
         attestation.setSignatureValid(signatureOk);
+        if (message != null) {
+            attestation.setLeafHash(HexFormat.of().formatHex(MerkleTree.leafHash(message)));
+        }
 
         source.setLastSeenAt(Instant.now());
         sourceRepository.save(source);
@@ -81,29 +101,36 @@ public class AttestationService {
 
     /**
      * Verify by payload hash:
-     * 1) attestation must exist
-     * 2) Ed25519 signature is re-checked against the stored source public key
+     * 1) an attestation for the hash must exist
+     * 2) the Ed25519 signature is re-checked over the canonical message rebuilt from
+     *    the STORED metadata, so any post-hoc change to timestamp/sequence/source breaks it.
+     *
+     * This covers source authenticity and metadata integrity. Detecting deletion or
+     * reordering of whole records is provided by the Merkle proof (GET
+     * /attestations/{id}/proof) and, once available, the external anchor (M6).
      */
     @Transactional(readOnly = true)
     public VerifyResponse verify(VerifyRequest request) {
         return attestationRepository.findByPayloadHash(request.getPayloadHash())
                 .map(a -> {
                     Source source = a.getSource();
-                    boolean cryptoOk = Ed25519Verifier.verify(
-                            source.getPublicKey(),
-                            a.getPayloadHash(),
-                            a.getSignature()
+                    long tsMillis = a.getTimestamp() != null ? a.getTimestamp().toEpochMilli() : 0L;
+                    byte[] message = canonicalMessage(
+                            source.getId().toString(),
+                            a.getSequenceNr(),
+                            tsMillis,
+                            a.getPayloadHash()
                     );
+                    boolean cryptoOk = message != null
+                            && Ed25519Verifier.verify(source.getPublicKey(), message, a.getSignature());
 
                     VerifyResponse resp = new VerifyResponse();
                     resp.setValid(cryptoOk);
                     resp.setAttestationId(a.getId());
                     resp.setSourceId(source.getId());
-                    if (cryptoOk) {
-                        resp.setMessage("Attestation found and Ed25519 signature is valid");
-                    } else {
-                        resp.setMessage("Attestation found but Ed25519 signature is INVALID");
-                    }
+                    resp.setMessage(cryptoOk
+                            ? "Attestation found and Ed25519 signature is valid (payload + metadata)"
+                            : "Attestation found but Ed25519 signature is INVALID");
                     return resp;
                 })
                 .orElseGet(() -> {
@@ -123,6 +150,24 @@ public class AttestationService {
     public Source createSource(String name, String publicKey) {
         Source source = new Source(name, publicKey);
         return sourceRepository.save(source);
+    }
+
+    /**
+     * Rebuilds the canonical signed message. Returns null if the sequence is missing
+     * or the payload hash is not valid hex, in which case the signature is treated as
+     * invalid (and no leaf hash is stored) rather than throwing.
+     */
+    private static byte[] canonicalMessage(String sourceId, Long sequence,
+                                           long tsEpochMillis, String payloadHashHex) {
+        if (sequence == null || payloadHashHex == null) {
+            return null;
+        }
+        try {
+            byte[] payloadHashRaw = HexFormat.of().parseHex(payloadHashHex.trim());
+            return Ed25519Verifier.canonicalAttestation(sourceId, sequence, tsEpochMillis, payloadHashRaw);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     private AttestationResponse toResponse(Attestation a) {

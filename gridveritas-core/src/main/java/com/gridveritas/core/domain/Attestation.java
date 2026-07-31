@@ -5,7 +5,13 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "attestations")
+@Table(
+        name = "attestations",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uq_attestation_source_seq",
+                columnNames = {"source_id", "sequence_nr"}
+        )
+)
 public class Attestation {
 
     @Id
@@ -22,7 +28,12 @@ public class Attestation {
     @Column(nullable = false)
     private Instant timestamp;
 
-    @Column(name = "sequence_nr")
+    /**
+     * Per-source monotonic sequence. Signed (Point 1) and unique per source
+     * (uq_attestation_source_seq) so a valid attestation cannot be relabelled or
+     * replayed. Non-null: every ingested attestation must carry a sequence.
+     */
+    @Column(name = "sequence_nr", nullable = false)
     private Long sequenceNr;
 
     @Column(nullable = false, columnDefinition = "TEXT")
@@ -31,6 +42,13 @@ public class Attestation {
     /** true when Ed25519 verification against the source public key succeeded */
     @Column(name = "signature_valid")
     private Boolean signatureValid;
+
+    /**
+     * Merkle leaf hash = SHA-256(0x00 || canonical signed message), hex-encoded.
+     * Computed at ingest; frozen into merkle_leaves when the attestation is sealed.
+     */
+    @Column(name = "leaf_hash", length = 64)
+    private String leafHash;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
@@ -104,6 +122,14 @@ public class Attestation {
 
     public void setSignatureValid(Boolean signatureValid) {
         this.signatureValid = signatureValid;
+    }
+
+    public String getLeafHash() {
+        return leafHash;
+    }
+
+    public void setLeafHash(String leafHash) {
+        this.leafHash = leafHash;
     }
 
     public Instant getCreatedAt() {

@@ -3,7 +3,6 @@ package com.gridveritas.core.web.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
-import java.time.Instant;
 import java.util.UUID;
 
 public class AttestationRequest {
@@ -14,9 +13,16 @@ public class AttestationRequest {
     @NotBlank
     private String payloadHash;
 
+    /**
+     * Source-claimed timestamp as epoch milliseconds (UTC).
+     * This is the value that is covered by the signature, so it is transmitted
+     * as an integer to avoid any string/format ambiguity between clients.
+     */
     @NotNull
-    private Instant timestamp;
+    private Long timestampEpochMillis;
 
+    /** Per-source monotonic sequence. Now covered by the signature, hence required. */
+    @NotNull
     private Long sequenceNr;
 
     @NotBlank
@@ -40,12 +46,12 @@ public class AttestationRequest {
         this.payloadHash = payloadHash;
     }
 
-    public Instant getTimestamp() {
-        return timestamp;
+    public Long getTimestampEpochMillis() {
+        return timestampEpochMillis;
     }
 
-    public void setTimestamp(Instant timestamp) {
-        this.timestamp = timestamp;
+    public void setTimestampEpochMillis(Long timestampEpochMillis) {
+        this.timestampEpochMillis = timestampEpochMillis;
     }
 
     public Long getSequenceNr() {
