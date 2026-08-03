@@ -17,6 +17,10 @@ spring:
     user: ${DB_OWNER_USER:${DB_APP_USER:gridveritas}}
     password: ${DB_OWNER_PASSWORD:${DB_APP_PASSWORD:gridveritas}}
     baseline-on-migrate: false      # start from a clean database (see notes)
+    # Sets a session variable the R__grant_app_role migration reads to create the
+    # limited runtime role with the right password (independent of Postgres init).
+    init-sqls:
+      - "SET gridveritas.app_password = '${APP_DB_PASSWORD:app-change-me}'"
 
   jpa:
     hibernate:

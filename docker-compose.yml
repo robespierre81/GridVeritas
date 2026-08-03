@@ -24,11 +24,8 @@ services:
       POSTGRES_DB: gridveritas
       POSTGRES_USER: gridveritas
       POSTGRES_PASSWORD: gridveritas
-      # password for the limited runtime role created on first init
-      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-app-change-me}
     volumes:
       - gridveritas-pgdata:/var/lib/postgresql/data
-      - ./db-init:/docker-entrypoint-initdb.d:ro
     networks:
       - gridveritas-net
     healthcheck:
@@ -88,6 +85,8 @@ services:
       # migrations: run as the table owner (full DDL)
       SPRING_FLYWAY_USER: gridveritas
       SPRING_FLYWAY_PASSWORD: gridveritas
+      # consumed by Flyway init-sqls to create the runtime role with this password
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-app-change-me}
       OLLAMA_URL: http://gridveritas-ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:1b}
       # --- M8 security (change these for anything beyond local dev) ---
@@ -150,6 +149,27 @@ services:
       - gridveritas-net
     restart: unless-stopped
 
+
+  # ---------- Demo data seeder (one-shot: docker compose --profile seed run --rm seed) ----------
+  seed:
+    build:
+      context: ./gridveritas-edge
+      dockerfile: Dockerfile.seed
+    image: gridveritas/seed:local
+    container_name: gridveritas-seed
+    profiles: ["seed"]
+    environment:
+      GRIDVERITAS_CORE_URL: http://gridveritas-core:8080
+      ADMIN_USER: admin
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin-change-me}
+      SEED_READINGS: "24"
+      SEED_INTERVAL_MIN: "60"
+    depends_on:
+      core:
+        condition: service_healthy
+    networks:
+      - gridveritas-net
+    restart: "no"
 
 networks:
   gridveritas-net:

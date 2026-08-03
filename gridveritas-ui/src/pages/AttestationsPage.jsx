@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 
@@ -87,6 +88,7 @@ export default function AttestationsPage() {
                 <th>Seq</th>
                 <th>Status</th>
                 <th>Signature</th>
+                <th>Proof</th>
               </tr>
             </thead>
             <tbody>
@@ -100,6 +102,9 @@ export default function AttestationsPage() {
                     {a.signatureValid === true && <span className="badge badge-ok">valid</span>}
                     {a.signatureValid === false && <span className="badge badge-fail">invalid</span>}
                     {a.signatureValid == null && <span className="badge badge-info">—</span>}
+                  </td>
+                  <td>
+                    <Link to={`/proof?id=${a.id}`} className="badge badge-info" style={{ textDecoration: 'none' }}>view</Link>
                   </td>
                 </tr>
               ))}

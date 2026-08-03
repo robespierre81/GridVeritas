@@ -1,5 +1,6 @@
 package com.gridveritas.core.service;
 
+import com.gridveritas.core.crypto.Ed25519Verifier;
 import com.gridveritas.core.crypto.MerkleTree;
 import com.gridveritas.core.crypto.TsaVerifier;
 import com.gridveritas.core.domain.Attestation;
@@ -125,6 +126,23 @@ public class MerkleService {
         MerkleLeaf leaf = leafOpt.get();
         MerkleRoot root = leaf.getRoot();
 
+        // The leaf that was sealed and externally anchored:
+        resp.setLeafHash(leaf.getLeafHash());
+        // Recompute the leaf from the record's CURRENT stored fields and compare.
+        // A mismatch means the stored record was altered after anchoring (tamper detected).
+        try {
+            byte[] msg = Ed25519Verifier.canonicalAttestation(
+                    att.getSource().getId().toString(),
+                    att.getSequenceNr(),
+                    att.getTimestamp().toEpochMilli(),
+                    HexFormat.of().parseHex(att.getPayloadHash()));
+            String recomputed = HexFormat.of().formatHex(MerkleTree.leafHash(msg));
+            resp.setCurrentLeaf(recomputed);
+            resp.setProvenanceIntact(recomputed.equalsIgnoreCase(leaf.getLeafHash()));
+        } catch (Exception e) {
+            resp.setProvenanceIntact(false);
+        }
+
         List<MerkleLeaf> ordered =
                 merkleLeafRepository.findByRootIdOrderByLeafIndexAsc(root.getId());
         List<byte[]> leaves = new ArrayList<>(ordered.size());
@@ -168,6 +186,10 @@ public class MerkleService {
         } else {
             resp.setAnchored(false);
             resp.setMessage("Included in a Merkle root. External anchor pending (will be added by the anchoring job).");
+        }
+        if (Boolean.FALSE.equals(resp.getProvenanceIntact())) {
+            resp.setMessage("PROVENANCE MISMATCH: the stored record no longer matches its "
+                    + "externally anchored leaf. Tampering detected.");
         }
         return resp;
     }

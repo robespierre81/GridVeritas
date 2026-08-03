@@ -4,6 +4,7 @@ import AttestationsPage from './pages/AttestationsPage'
 import VerifyPage from './pages/VerifyPage'
 import AnomaliesPage from './pages/AnomaliesPage'
 import AuditPage from './pages/AuditPage'
+import ProofPage from './pages/ProofPage'
 import AuditTrailPage from './pages/AuditTrailPage'
 import LoginPanel from './components/LoginPanel'
 
@@ -15,6 +16,7 @@ export default function App() {
         <nav>
           <NavLink to="/" end>Sources</NavLink>
           <NavLink to="/attestations">Attestations</NavLink>
+          <NavLink to="/proof">Proof &amp; Anchor</NavLink>
           <NavLink to="/verify">Verify</NavLink>
           <NavLink to="/anomalies">Anomalies</NavLink>
           <NavLink to="/audit-trail">Audit Trail</NavLink>
@@ -26,6 +28,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<SourcesPage />} />
           <Route path="/attestations" element={<AttestationsPage />} />
+          <Route path="/proof" element={<ProofPage />} />
           <Route path="/verify" element={<VerifyPage />} />
           <Route path="/anomalies" element={<AnomaliesPage />} />
           <Route path="/audit-trail" element={<AuditTrailPage />} />

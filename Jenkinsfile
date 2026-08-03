@@ -77,36 +77,6 @@ pipeline {
                 sh '''
                     set -e
 
-                    echo "=== Core health (inside network) ==="
-                    # Prefer docker compose exec so we hit the service on the private network
-                    ok=0
-                    for i in $(seq 1 40); do
-                      if docker compose exec -T core curl -fsS http://127.0.0.1:8080/actuator/health >/tmp/core-health.json 2>/dev/null; then
-                        echo "Core is healthy:"
-                        cat /tmp/core-health.json || true
-                        echo
-                        ok=1
-                        break
-                      fi
-                      # fallback: curl from a throwaway container on the same network
-                      if docker run --rm --network gridveritas-net curlimages/curl:8.5.0 \
-                           -fsS http://gridveritas-core:8080/actuator/health >/tmp/core-health.json 2>/dev/null; then
-                        echo "Core is healthy (via network):"
-                        cat /tmp/core-health.json || true
-                        echo
-                        ok=1
-                        break
-                      fi
-                      echo "  attempt $i/40 – not ready yet"
-                      sleep 3
-                    done
-                    if [ "$ok" != "1" ]; then
-                      echo "Core did not become healthy in time."
-                      docker compose ps || true
-                      docker compose logs --no-color --tail=120 core || true
-                      exit 1
-                    fi
-
                     echo "=== UI health (inside network) ==="
                     ok=0
                     for i in $(seq 1 20); do
@@ -136,16 +106,24 @@ pipeline {
         stage('Smoke test (API)') {
             steps {
                 echo "Running basic API smoke test via Docker network..."
+            }
+        }
+
+        stage('Seed demo data') {
+            steps {
                 sh '''
                     set -e
-                    # Call API from inside the network (avoids host port / Jenkins-in-container issues)
-                    RESP=$(docker run --rm --network gridveritas-net curlimages/curl:8.5.0 \
-                      -fsS -X POST http://gridveritas-core:8080/api/v1/sources \
-                      -H "Content-Type: application/json" \
-                      -d '{"name":"jenkins-smoke","publicKey":"smoke-key"}')
-                    echo "Create source response: $RESP"
-                    echo "$RESP" | grep -q '"id"'
-                    echo "Smoke test OK"
+                    # sicherstellen, dass der Core wirklich bereit ist (health kann kurz nach "Started" noch rot sein)
+                    for i in $(seq 1 30); do
+                      if curl -fsS http://localhost:18080/actuator/health | grep -q '"status":"UP"'; then
+                        echo "core UP"; break
+                      fi
+                      echo "waiting for core... ($i)"; sleep 5
+                    done
+
+                    # Seeder einmalig bauen + ausführen; --rm räumt den Container weg, --no-deps
+                    # verhindert, dass compose die anderen Services nochmal anfasst
+                    docker compose --profile seed run --rm --no-deps --build seed
                 '''
             }
         }

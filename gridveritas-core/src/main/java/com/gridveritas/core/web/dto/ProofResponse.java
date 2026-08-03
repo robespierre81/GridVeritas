@@ -43,7 +43,9 @@ public class ProofResponse {
     private UUID attestationId;
     private String status;          // SEALED | PENDING_SEAL
     private String message;
-    private String leafHash;        // hex, SHA-256(0x00 || canonical message)
+    private String leafHash;        // hex, the frozen leaf that was sealed & anchored
+    private String currentLeaf;     // hex, recomputed from the record's CURRENT stored fields
+    private Boolean provenanceIntact; // true if currentLeaf still matches the anchored leaf
     private Integer leafIndex;
     private List<Step> auditPath;
     private String rootHash;
@@ -196,5 +198,21 @@ public class ProofResponse {
 
     public void setAnchorTrusted(Boolean anchorTrusted) {
         this.anchorTrusted = anchorTrusted;
+    }
+
+    public String getCurrentLeaf() {
+        return currentLeaf;
+    }
+
+    public void setCurrentLeaf(String currentLeaf) {
+        this.currentLeaf = currentLeaf;
+    }
+
+    public Boolean getProvenanceIntact() {
+        return provenanceIntact;
+    }
+
+    public void setProvenanceIntact(Boolean provenanceIntact) {
+        this.provenanceIntact = provenanceIntact;
     }
 }
