@@ -1,0 +1,20 @@
+{
+  "title": "GridVeritas reference architecture",
+  "description": "Public snapshot of the GridVeritas architecture, ADRs, and threat model. Verification fabric for DER MV&S under FERC Order No. 2222. Not an RTO/ISO certification.",
+  "creators": [
+    {
+      "name": "Bodemer, Oliver",
+      "affiliation": "e-Softworks Inc."
+    }
+  ],
+  "keywords": [
+    "GridVeritas",
+    "FERC Order 2222",
+    "Merkle provenance",
+    "RFC 3161",
+    "DER aggregation"
+  ],
+  "license": "CC-BY-4.0",
+  "upload_type": "publication",
+  "publication_type": "technicalnote"
+}

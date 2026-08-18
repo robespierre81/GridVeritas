@@ -17,5 +17,11 @@ ADRs document significant architectural and technology choices. They follow a li
 | [ADR-009](ADR-009-anchor-token-verification.md) | Anchor token verification & trust-pinning | Accepted |
 | [ADR-010](ADR-010-abuse-resistance-rate-limiting.md) | Abuse resistance: in-app rate limiting + body-size cap | Accepted |
 | [ADR-011](ADR-011-enforced-append-only-role.md) | Enforced append-only via runtime non-owner role (migration) | Accepted |
+| [ADR-012](ADR-012-test-coverage-and-load-testing.md) | Automated test coverage and performance/load testing | Accepted |
+| [ADR-013](ADR-013-multi-instance-ha.md) | Multi-instance HA: Redis + Traefik + Postgres advisory locks | Accepted |
+| [ADR-014](ADR-014-federation-signed-anchored-roots.md) | Federation of signed, anchored Merkle roots | Accepted |
+| [ADR-015](ADR-015-postgres-streaming-replica.md) | Single-host PostgreSQL streaming replica + failover | Accepted |
+| [ADR-016](ADR-016-der-mvs-reference-workflow.md) | DER MV&S reference workflow (FERC 2222) | Accepted |
+| [ADR-017](ADR-017-public-reference-architecture.md) | Public reference-architecture publication package | Accepted |
 
-Source: *GridVeritas Architecture Baseline v0.2 / v0.3* (July–August 2026)
+Source: *GridVeritas Architecture Baseline v1.4* (August 2026). ODT numbering differs: ODT ADR-013 is federation (repo ADR-014); ODT ADR-014 is this M14 (repo ADR-016); ODT ADR-015 is M15 (repo ADR-017); ODT ADR-016 is database HA (repo ADR-015).

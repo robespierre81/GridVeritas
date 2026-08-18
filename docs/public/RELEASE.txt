@@ -1,0 +1,11 @@
+# Filled after a real deposit. Do not invent a DOI.
+
+public_github_url: https://github.com/robespierre81/GridVeritas
+zenodo_doi: 10.5281/zenodo.21820827
+zenodo_url: https://doi.org/10.5281/zenodo.21820827
+git_tag: docs-v1.4
+snapshot_date: 2026-08-06
+zenodo_record: https://zenodo.org/records/21820827
+zenodo_title: "GridVeritas: A Cryptographically Verifiable Data-Integrity and Provenance Platform for Multi-Party Measurement, Verification, and Settlement of Aggregated Distributed Energy Resources"
+zenodo_version: v1
+

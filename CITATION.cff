@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+title: GridVeritas reference architecture
+message: If you use this architecture, please cite it.
+type: software
+authors:
+  - family-names: Bodemer
+    given-names: Oliver
+    affiliation: e-Softworks Inc.
+    orcid: "https://orcid.org/0000-0002-4412-4211"
+date-released: "2026-08-06"
+version: "1.4"
+license: CC-BY-4.0
+repository-code: "https://github.com/robespierre81/GridVeritas"
+url: "https://doi.org/10.5281/zenodo.21820827"
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.21820827
+    description: Zenodo v1 (record 21820827)
+abstract: >
+  GridVeritas is a verification fabric for critical grid data. This citation
+  describes the public reference architecture, ADRs, and threat model.
+  It is not an RTO/ISO certification.
