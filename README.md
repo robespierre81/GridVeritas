@@ -1,3 +1,5 @@
+Public deposit: https://doi.org/10.5281/zenodo.21820827 — source https://github.com/robespierre81/GridVeritas (`docs-v1.4`).
+
 # GridVeritas – Isolated Docker Stack
 
 Everything runs on a **dedicated Docker network** (`gridveritas-net`) so it does not collide with your other containers.
