@@ -67,3 +67,5 @@ CREATE TABLE merkle_leaves (
 );
 
 CREATE INDEX idx_merkle_leaves_root ON merkle_leaves (root_id, leaf_index);
+
+

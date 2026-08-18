@@ -7,7 +7,10 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.3.2</version>
+        <!-- 3.3.9+ pulls fixed tomcat 10.1.36 (CVE-2025-24813), spring-framework
+             6.1.13+ (CVE-2024-38816) and spring-security 6.3.4+ (CVE-2024-38821).
+             Use the latest available 3.3.x patch. -->
+        <version>3.3.13</version>
         <relativePath/>
     </parent>
 
@@ -53,7 +56,9 @@
         <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcpkix-jdk18on</artifactId>
-            <version>1.78.1</version>
+            <!-- bumped for the bcprov CVE; if Trivy still flags it, use the exact
+                 fixed version it reports (e.g. 1.81.1). -->
+            <version>1.81</version>
         </dependency>
 
         <!-- Spring Security + JWT (M8: authentication) -->
@@ -90,6 +95,16 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
+        <!-- Redis: shared rate-limit state across instances (ADR-013) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
 
         <!-- Lombok (optional but convenient in NetBeans) -->
         <dependency>
@@ -107,6 +122,25 @@
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Testcontainers: Redis + Postgres integration tests for multi-instance
+             HA (ADR-013). Need real Docker, so they don't run on a Docker-less
+             machine - only in CI/on a Docker-capable host. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -127,4 +161,65 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- Run with: mvn -Psecurity-scan verify   (kept out of normal builds; it is slow) -->
+        <profile>
+            <id>security-scan</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.owasp</groupId>
+                        <artifactId>dependency-check-maven</artifactId>
+                        <version>10.0.4</version>
+                        <configuration>
+                            <!-- Fail only on CRITICAL (CVSS >= 9); HIGH is reported, not gating. -->
+                            <failBuildOnCVSS>9</failBuildOnCVSS>
+                            <formats>
+                                <format>HTML</format>
+                                <format>JSON</format>
+                                <format>SARIF</format>
+                            </formats>
+                            <suppressionFiles>
+                                <suppressionFile>${project.basedir}/owasp-suppressions.xml</suppressionFile>
+                            </suppressionFiles>
+                            <!-- Set NVD_API_KEY in the environment to make the first run fast. -->
+                            <nvdApiKey>${env.NVD_API_KEY}</nvdApiKey>
+                            <nvdApiDelay>6000</nvdApiDelay>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
+          Run with: mvn -Pload-test -Dexec.args="<baseUrl> <adminPassword> <ingestPassword>" test-compile exec:java
+          e.g.:     mvn -Pload-test -Dexec.args="http://localhost:8080 admin-change-me ingest-change-me" test-compile exec:java
+          Kept out of normal builds: it drives real load against a running instance
+          and must never fire as a side effect of `mvn test` or `mvn verify`.
+        -->
+        <profile>
+            <id>load-test</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.4.1</version>
+                        <configuration>
+                            <mainClass>com.gridveritas.core.loadtest.IngestLoadRunner</mainClass>
+                            <classpathScope>test</classpathScope>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

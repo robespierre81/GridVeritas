@@ -10,29 +10,103 @@
 #
 # UI:   http://localhost:3080
 # API:  http://localhost:18080/api/v1/...
+# DB:   postgres-rw:5432 (HAProxy → primary, replica is backup)
 # ============================================================
 
 name: gridveritas
 
 services:
 
-  # ---------- PostgreSQL ----------
-  postgres:
-    image: postgres:16-alpine
+  # ---------- PostgreSQL primary (streaming replication, single-host HA) ----------
+  postgres-primary:
+    build:
+      context: ./postgres/primary
+      dockerfile: Dockerfile
+    image: gridveritas/postgres-primary:local
     container_name: gridveritas-postgres
     environment:
       POSTGRES_DB: gridveritas
       POSTGRES_USER: gridveritas
       POSTGRES_PASSWORD: gridveritas
+      REPLICATOR_PASSWORD: ${REPLICATOR_PASSWORD:-repl-change-me}
     volumes:
       - gridveritas-pgdata:/var/lib/postgresql/data
     networks:
-      - gridveritas-net
+      gridveritas-net:
+        aliases:
+          - postgres
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gridveritas -d gridveritas"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U gridveritas -d gridveritas && psql -U gridveritas -d gridveritas -tAc \"SELECT 1 FROM pg_roles WHERE rolname='replicator'\" | grep -q 1 && grep -q 'replication replicator' \"$$PGDATA/pg_hba.conf\"",
+        ]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
+    restart: unless-stopped
+
+  postgres-replica:
+    build:
+      context: ./postgres/replica
+      dockerfile: Dockerfile
+    image: gridveritas/postgres-replica:local
+    container_name: gridveritas-postgres-replica
+    environment:
+      POSTGRES_DB: gridveritas
+      POSTGRES_USER: gridveritas
+      POSTGRES_PASSWORD: gridveritas
+      REPLICATOR_PASSWORD: ${REPLICATOR_PASSWORD:-repl-change-me}
+      PRIMARY_HOST: postgres-primary
+    volumes:
+      - gridveritas-pgdata-replica:/var/lib/postgresql/data
+    networks:
+      - gridveritas-net
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    mem_limit: ${REPLICA_MEM_LIMIT:-384m}
+    cpus: ${REPLICA_CPUS:-0.25}
+    restart: unless-stopped
+
+  # Write path for the app. After promote, watch freezes the old primary.
+  postgres-rw:
+    build:
+      context: ./postgres/haproxy
+      dockerfile: Dockerfile
+    image: gridveritas/postgres-rw:local
+    container_name: gridveritas-postgres-rw
+    volumes:
+      - gridveritas-pgha:/ha
+    networks:
+      - gridveritas-net
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres-watch:
+    build:
+      context: ./postgres/watch
+      dockerfile: Dockerfile
+    image: gridveritas/postgres-watch:local
+    container_name: gridveritas-postgres-watch
+    environment:
+      POSTGRES_USER: gridveritas
+      POSTGRES_DB: gridveritas
+      POSTGRES_PASSWORD: gridveritas
+      PRIMARY_HOST: postgres-primary
+      REPLICA_HOST: postgres-replica
+      DOWN_SECONDS: ${PG_FAILOVER_SECONDS:-15}
+    volumes:
+      - gridveritas-pgha:/ha
+    networks:
+      - gridveritas-net
+    depends_on:
+      - postgres-rw
+      - postgres-replica
+    mem_limit: 64m
+    cpus: 0.10
     restart: unless-stopped
 
   # ---------- Ollama (local LLM server for the audit assistant) ----------
@@ -47,7 +121,8 @@ services:
       - gridveritas-ollama:/root/.ollama
     networks:
       - gridveritas-net
-    # mem_limit: 4g   # uncomment to cap; a 1B model needs ~1.5 GiB while loaded
+    mem_limit: ${OLLAMA_MEM_LIMIT:-1536m}
+    cpus: ${OLLAMA_CPUS:-1.00}
     restart: unless-stopped
 
   # ---------- One-shot: pull the model, then exit ----------
@@ -70,15 +145,32 @@ services:
       - gridveritas-net
     restart: "no"
 
+  # ---------- Redis (shared rate-limit state across core instances, ADR-013) ----------
+  redis:
+    image: redis:7-alpine
+    container_name: gridveritas-redis
+    networks:
+      - gridveritas-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   # ---------- Core (Spring Boot) ----------
+  # No container_name / fixed host port: both are incompatible with running
+  # more than one replica (docker compose up -d --scale core=2). Traefik
+  # (below) is the single stable entrypoint and load balancer across
+  # however many replicas are actually running (ADR-013).
   core:
     build:
       context: ./gridveritas-core
       dockerfile: Dockerfile
     image: gridveritas/core:local
-    container_name: gridveritas-core
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/gridveritas
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-rw:5432/gridveritas
+      FEDERATION_OPERATOR_DIR: /app/operator
       # runtime: limited, append-only-enforced role
       SPRING_DATASOURCE_USERNAME: gridveritas_app
       SPRING_DATASOURCE_PASSWORD: ${APP_DB_PASSWORD:-app-change-me}
@@ -89,25 +181,63 @@ services:
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:-app-change-me}
       OLLAMA_URL: http://gridveritas-ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:1b}
+      # Shared rate-limit state across replicas (ADR-013)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       # --- M8 security (change these for anything beyond local dev) ---
       JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-to-a-long-random-secret}
       READ_KEY: ${READ_KEY:-dev-read-key-change-me}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin-change-me}
       INGEST_PASSWORD: ${INGEST_PASSWORD:-ingest-change-me}
-      JAVA_OPTS: "-Xms256m -Xmx512m"
+      JAVA_OPTS: ${CORE_JAVA_OPTS:--Xms128m -Xmx384m}
+    # This host also runs ERP, Reacher, Jenkins, Ollama, … Four unbounded
+    # JVMs will pin the box. Keep scale at 2 unless the machine has spare CPU.
+    mem_limit: ${CORE_MEM_LIMIT:-640m}
+    cpus: ${CORE_CPUS:-0.50}
+    volumes:
+      - gridveritas-operator:/app/operator
     depends_on:
-      postgres:
+      postgres-primary:
+        condition: service_healthy
+      postgres-rw:
+        condition: service_started
+      redis:
         condition: service_healthy
     networks:
       - gridveritas-net
-    ports:
-      - "18080:8080"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
       interval: 15s
       timeout: 5s
       retries: 10
       start_period: 40s
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.core.rule=PathPrefix(`/api`) || PathPrefix(`/actuator`)"
+      - "traefik.http.routers.core.entrypoints=web"
+      - "traefik.http.services.core.loadbalancer.server.port=8080"
+      # Actively excludes an unhealthy replica from rotation - not just the
+      # one-time startup gate depends_on gives every other consumer.
+      - "traefik.http.services.core.loadbalancer.healthcheck.path=/actuator/health"
+      - "traefik.http.services.core.loadbalancer.healthcheck.interval=10s"
+
+  # ---------- Nginx load balancer (service name stays `traefik`) ----------
+  # nginx-lb.conf is COPY'd into the image (see nginx-lb/Dockerfile).
+  # Do not bind-mount it: Jenkins is Docker-in-Docker and workspace
+  # bind-mounts are not visible to the host daemon.
+  traefik:
+    build:
+      context: .
+      dockerfile: nginx-lb/Dockerfile
+    image: gridveritas/lb:local
+    container_name: gridveritas-traefik
+    networks:
+      - gridveritas-net
+    ports:
+      - "18080:80"
+    depends_on:
+      - core
     restart: unless-stopped
 
   # ---------- UI (React + nginx) ----------
@@ -118,8 +248,7 @@ services:
     image: gridveritas/ui:local
     container_name: gridveritas-ui
     depends_on:
-      core:
-        condition: service_healthy
+      - traefik
     networks:
       - gridveritas-net
     ports:
@@ -135,7 +264,7 @@ services:
     container_name: gridveritas-edge
     profiles: ["edge"]
     environment:
-      GRIDVERITAS_CORE_URL: http://gridveritas-core:8080
+      GRIDVERITAS_CORE_URL: http://traefik:80
       GRIDVERITAS_AGENT_NAME: edge-agent-01
       GRIDVERITAS_INTERVAL: 15s
       # dev: admin creds let the agent register its source AND ingest.
@@ -145,6 +274,8 @@ services:
     depends_on:
       core:
         condition: service_healthy
+      traefik:
+        condition: service_started
     networks:
       - gridveritas-net
     restart: unless-stopped
@@ -159,7 +290,7 @@ services:
     container_name: gridveritas-seed
     profiles: ["seed"]
     environment:
-      GRIDVERITAS_CORE_URL: http://gridveritas-core:8080
+      GRIDVERITAS_CORE_URL: http://traefik:80
       ADMIN_USER: admin
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin-change-me}
       SEED_READINGS: "24"
@@ -167,9 +298,67 @@ services:
     depends_on:
       core:
         condition: service_healthy
+      traefik:
+        condition: service_started
     networks:
       - gridveritas-net
     restart: "no"
+
+  # ---------- Prometheus (scrapes every core replica via Docker DNS, ADR-013) ----------
+  # Config is baked into the image — do not bind-mount prometheus.yml (Jenkins DinD).
+  prometheus:
+    build:
+      context: ./monitoring/prometheus
+      dockerfile: Dockerfile
+    image: gridveritas/prometheus:local
+    container_name: gridveritas-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+      # Keep internal routes at / so nginx can strip /gridveritas/prometheus/.
+      # Set PROMETHEUS_EXTERNAL_URL when serving behind that public path.
+      - --web.external-url=${PROMETHEUS_EXTERNAL_URL:-http://localhost:19090/}
+      - --web.route-prefix=/
+    volumes:
+      - gridveritas-prometheus:/prometheus
+    networks:
+      - gridveritas-net
+    ports:
+      - "19090:9090"
+    mem_limit: 512m
+    cpus: 0.25
+    depends_on:
+      - core
+    restart: unless-stopped
+
+  # ---------- Grafana (provisioned datasource + GridVeritas overview dashboard) ----------
+  grafana:
+    build:
+      context: ./monitoring/grafana
+      dockerfile: Dockerfile
+    image: gridveritas/grafana:local
+    container_name: gridveritas-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin-change-me}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_DOMAIN: ${GRAFANA_DOMAIN:-e-softworks.consulting}
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-https://e-softworks.consulting/gridveritas/grafana/}
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - gridveritas-grafana:/var/lib/grafana
+    networks:
+      - gridveritas-net
+    ports:
+      - "33000:3000"
+    mem_limit: 256m
+    cpus: 0.25
+    depends_on:
+      - prometheus
+    restart: unless-stopped
 
 networks:
   gridveritas-net:
@@ -181,3 +370,13 @@ volumes:
     name: gridveritas-pgdata
   gridveritas-ollama:
     name: gridveritas-ollama
+  gridveritas-prometheus:
+    name: gridveritas-prometheus
+  gridveritas-grafana:
+    name: gridveritas-grafana
+  gridveritas-pgdata-replica:
+    name: gridveritas-pgdata-replica
+  gridveritas-pgha:
+    name: gridveritas-pgha
+  gridveritas-operator:
+    name: gridveritas-operator

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "reacher-ui-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "/Users/bodi/NetBeansProjects/reacher/reacher-ui"],
+      "port": 5173
+    }
+  ]
+}

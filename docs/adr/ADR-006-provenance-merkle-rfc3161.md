@@ -31,3 +31,10 @@ The core trust requirement is to prove that operational data was not altered bet
 
 ## Later-phase option
 Stronger anchoring via multi-witness co-signing or a transparency-log deployment, if a consortium of independent parties emerges.
+
+## Validation (August 2026)
+`MerkleService` is covered by `MerkleServiceTest` (see ADR-012): sealing and
+root-chaining, tamper detection after sealing, and — the guarantee an
+independent verifier actually relies on — reconstructing the root hash from
+just a leaf hash and its audit path via `MerkleTree.rootFromAuditPath`, checked
+against the value `buildProof` returns.

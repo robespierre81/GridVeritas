@@ -31,3 +31,10 @@ Verification runs both at acquisition (unverifiable tokens are never stored) and
 ## Later enhancements
 - CRL/OCSP revocation checking
 - Multiple pinned CAs for multi-TSA anchoring
+
+## Validation (August 2026)
+`TsaVerifier` is covered by `TsaVerifierTest` (see ADR-012): real, self-minted
+BouncyCastle timestamp tokens exercise message-imprint mismatch, tampered/
+malformed token bytes, and both directions of trust-pinning (trusted when the
+signer is the pinned anchor, fails closed when it is not) against genuine
+ASN.1/CMS structures rather than mocks.

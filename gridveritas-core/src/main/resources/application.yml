@@ -35,10 +35,21 @@ spring:
     serialization:
       write-dates-as-timestamps: false
 
+  # Shared rate-limit state across instances (ADR-013). Only used by
+  # RedisRateLimitStore, which is inactive under the test profile (see
+  # application-test.yml) - mvn test needs no Redis.
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
 gridveritas:
   merkle:
     seal-interval-ms: ${MERKLE_SEAL_INTERVAL_MS:60000}
     max-batch: ${MERKLE_MAX_BATCH:1000}
+    # Postgres advisory-lock leader election so only one instance seals per
+    # cycle when running multiple instances (ADR-013). Requires Postgres.
+    leader-election-enabled: ${MERKLE_LEADER_ELECTION_ENABLED:true}
   anchor:
     # Public RFC 3161 TSA. freeTSA is a general-purpose free service; confirm its
     # terms, or switch to an accredited/internal TSA a regulated partner accepts.
@@ -71,6 +82,11 @@ gridveritas:
       admin-password: ${ADMIN_PASSWORD:admin-change-me}
       ingest-password: ${INGEST_PASSWORD:ingest-change-me}
     max-body-bytes: ${MAX_BODY_BYTES:262144}
+    # X-Forwarded-For is only honored for rate-limit client-IP extraction when the
+    # request's direct peer address is in this comma-separated list (e.g. the
+    # reverse proxy container's address on the Docker network) - REACH-1000.
+    # Empty by default: request.getRemoteAddr() is always used until configured.
+    trusted-proxies: ${TRUSTED_PROXIES:}
     rate-limit:
       enabled: ${RATE_LIMIT_ENABLED:true}
       general-per-minute: ${RATE_LIMIT_GENERAL:240}
@@ -78,6 +94,13 @@ gridveritas:
       max-keys: ${RATE_LIMIT_MAX_KEYS:100000}
     mtls:
       require-for-ingest: ${MTLS_REQUIRE_INGEST:false}
+  federation:
+    # Shared by every core replica (named volume /app/operator).
+    operator-dir: ${FEDERATION_OPERATOR_DIR:${java.io.tmpdir}/gridveritas-operator}
+    fetch-enabled: ${FEDERATION_FETCH_ENABLED:true}
+    fetch-interval-ms: ${FEDERATION_FETCH_INTERVAL_MS:300000}
+    fetch-timeout-ms: ${FEDERATION_FETCH_TIMEOUT_MS:10000}
+    publish-limit: ${FEDERATION_PUBLISH_LIMIT:50}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -95,10 +118,18 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: when_authorized
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
 
 logging:
   level:

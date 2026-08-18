@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Docker Compose DNS returns every core replica. Refresh often so
+  # `docker compose up --scale core=N` is picked up without a restart.
+  - job_name: gridveritas-core
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names: [core]
+        type: A
+        port: 8080
+        refresh_interval: 10s

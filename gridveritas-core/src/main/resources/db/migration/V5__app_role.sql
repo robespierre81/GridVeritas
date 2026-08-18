@@ -31,4 +31,7 @@ GRANT SELECT, INSERT ON
     audit_log
     TO gridveritas_app;
 
-GRANT SELECT, INSERT, UPDATE ON sources TO gridveritas_app;
+GRANT SELECT, INSERT ON attestations TO gridveritas_app;
+GRANT SELECT, INSERT ON merkle_roots TO gridveritas_app;
+GRANT SELECT, INSERT ON merkle_leaves TO gridveritas_app;
+GRANT SELECT, INSERT, UPDATE ON sources TO gridveritas_app;          -- ← dieser fehlt aktuell

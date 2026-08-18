@@ -1,0 +1,4 @@
+# Only the nginx LB image uses context `.` (see docker-compose.yml).
+# Ignore everything else so `docker compose build` does not send the repo.
+*
+!nginx-lb.conf

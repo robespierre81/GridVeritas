@@ -1,0 +1,122 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value" },
+      "pluginVersion": "11.4.0",
+      "targets": [{ "expr": "sum(up{job=\"gridveritas-core\"})", "legendFormat": "up", "refId": "A" }],
+      "title": "Core scrapes up",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "id": 2,
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value" },
+      "pluginVersion": "11.4.0",
+      "targets": [{ "expr": "max(gridveritas_instances_online)", "legendFormat": "online", "refId": "A" }],
+      "title": "Instances online",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "id": 3,
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "pluginVersion": "11.4.0",
+      "targets": [{ "expr": "avg(process_cpu_usage{job=\"gridveritas-core\"})", "legendFormat": "cpu", "refId": "A" }],
+      "title": "Process CPU",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "id": 4,
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "pluginVersion": "11.4.0",
+      "targets": [{ "expr": "sum(jvm_memory_used_bytes{job=\"gridveritas-core\",area=\"heap\"})", "legendFormat": "heap", "refId": "A" }],
+      "title": "Heap used",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "id": 5,
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "pluginVersion": "11.4.0",
+      "targets": [{ "expr": "sum(rate(http_server_requests_seconds_count{job=\"gridveritas-core\"}[5m]))", "legendFormat": "rps", "refId": "A" }],
+      "title": "HTTP requests / s",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "spanNulls": true }, "unit": "reqps" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "id": 6,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } },
+      "targets": [{ "expr": "sum by (uri, status) (rate(http_server_requests_seconds_count{job=\"gridveritas-core\"}[5m]))", "legendFormat": "{{uri}} {{status}}", "refId": "A" }],
+      "title": "HTTP request rate by URI / status",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "spanNulls": true }, "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "id": 7,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum by (le, uri) (rate(http_server_requests_seconds_bucket{job=\"gridveritas-core\"}[5m])))", "legendFormat": "p95 {{uri}}", "refId": "A" }],
+      "title": "HTTP latency p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 15, "lineWidth": 2, "spanNulls": true }, "unit": "bytes" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "id": 8,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "sum by (instance, id) (jvm_memory_used_bytes{job=\"gridveritas-core\",area=\"heap\"})", "legendFormat": "used {{instance}} {{id}}", "refId": "A" },
+        { "expr": "sum by (instance, id) (jvm_memory_max_bytes{job=\"gridveritas-core\",area=\"heap\"})", "legendFormat": "max {{instance}} {{id}}", "refId": "B" }
+      ],
+      "title": "JVM heap by instance",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "spanNulls": true } }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "id": 9,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "sum by (instance) (hikaricp_connections_active{job=\"gridveritas-core\"})", "legendFormat": "active {{instance}}", "refId": "A" },
+        { "expr": "sum by (instance) (hikaricp_connections_idle{job=\"gridveritas-core\"})", "legendFormat": "idle {{instance}}", "refId": "B" },
+        { "expr": "sum by (instance) (hikaricp_connections_pending{job=\"gridveritas-core\"})", "legendFormat": "pending {{instance}}", "refId": "C" }
+      ],
+      "title": "HikariCP pool",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["gridveritas"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "GridVeritas overview",
+  "uid": "gridveritas-overview",
+  "version": 1
+}

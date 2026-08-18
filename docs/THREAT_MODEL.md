@@ -12,7 +12,9 @@ Related decisions: ADR-006 (Merkle + RFC 3161 anchoring, not a blockchain),
 ADR-007 (Flyway-managed schema + two-role append-only), ADR-008 (API auth: JWT +
 read key), ADR-009 (anchor-token verification & trust-pinning), ADR-010 (rate
 limiting + body-size cap), ADR-011 (enforced append-only via a runtime non-owner
-role, provisioned by a versioned migration).
+role, provisioned by a versioned migration), ADR-012 (automated test coverage
+and performance/load testing), ADR-013 (multi-instance HA: Redis + Traefik +
+Postgres advisory locks).
 
 ---
 
@@ -83,10 +85,18 @@ the security of the operator's wider network, and formal certification.
     the root, CMS signature against the embedded signer certificate, and the timestamping
     EKU — at acquisition (an unverifiable token is never stored) and on `/proof`. With a
     configured TSA CA, the signer is trust-pinned via PKIX; otherwise integrity is verified
-    but not trust-pinned (logged).
+    but not trust-pinned (logged). Verified by `TsaVerifierTest` and `MerkleServiceTest`
+    (ADR-012), including an independent verifier's root reconstruction from a leaf + audit
+    path — not just that the code runs without throwing.
   - *Implemented (M8, ADR-011):* append-only is enforced at runtime — the app connects as a
     non-owner role with `SELECT`/`INSERT` only on append-only tables; the role and grants are
     provisioned by a versioned migration.
+  - *Implemented (August 2026, ADR-013):* the sealing job (`MerkleService.sealNewLeaves`) is
+    now safe to run on multiple instances — a Postgres advisory lock
+    (`pg_try_advisory_xact_lock`) ensures only one instance actually seals per cycle.
+    Without this, multiple instances racing to seal the same unsealed attestations could
+    produce duplicate or partial Merkle roots, which would itself have looked like
+    tampering to an independent verifier.
   - *Residual:* TSA revocation (CRL/OCSP) checking is deferred; anchoring cadence bounds the
     undetected-tampering window (open domain question, Baseline 6).
 
@@ -120,10 +130,21 @@ the security of the operator's wider network, and formal certification.
   - *Implemented (M8, ADR-010):* a per-client (IP) token-bucket rate limiter — general plus a
     stricter limit on `/auth/token` — returning `429` with `Retry-After`, and a request-body
     size cap returning `413`, enforced before the security chain.
-  - *Residual:* the limiter is in-memory per instance (needs a shared store for multi-instance);
-    the body cap is Content-Length based (streaming/chunked bodies need a streaming cap);
-    correct per-client limiting requires the proxy to set `X-Forwarded-For`. HA is a later
-    phase (ADR-005).
+  - *Implemented (August 2026, ADR-010):* `X-Forwarded-For` is only trusted from a configured
+    reverse-proxy address (`gridveritas.security.trusted-proxies`); previously any caller could
+    spoof the header to get a fresh bucket per request, bypassing both limits (REACH-1000).
+    Verified under real thread contention, not just single-threaded logic, by
+    `RateLimiterConcurrencyTest` (ADR-012).
+  - *Implemented (August 2026, ADR-013):* the rate limiter's state is now Redis-backed
+    (`RedisRateLimitStore`), so multiple gridveritas-core instances behind Traefik enforce
+    one shared effective limit per client instead of N separate ones (one per instance's
+    own in-memory map, as before). Traefik load-balances across replicas and actively
+    excludes an unhealthy one, rather than a static reverse-proxy config that would
+    silently keep sending all traffic to a single instance.
+  - *Residual:* the body cap is Content-Length based (streaming/chunked bodies need a
+    streaming cap); correct per-client limiting still requires the proxy to be listed in
+    `trusted-proxies` (an unconfigured deployment falls back to the connecting socket
+    address, which is safe but wrong behind an unlisted proxy).
 
 ### Elevation of privilege
 - **Threat:** an application-level actor gains DB owner or host privileges.
@@ -144,8 +165,10 @@ and the unverified anchor token) are now closed (M8, ADR-008/009). Remaining ite
 2. **Certificate revocation** — add CRL/OCSP checking for the TSA and mTLS certificates.
 3. **Enable transport encryption in deployment** — turn on mTLS (TB1) and TLS at the proxy (TB5).
 4. **Move to a real identity provider** — replace the two configured users with a directory / OIDC.
-5. **Multi-instance concerns** — a shared rate-limit store; HA is a known, accepted limitation
-   for this phase (ADR-005).
+5. **Multi-instance concerns** — mostly closed (ADR-013): shared rate-limit state (Redis),
+   Merkle-sealing leader election (Postgres advisory lock), and load balancing (Traefik) are
+   all implemented. mTLS deployment mode remains single-instance (would need TCP-passthrough
+   routing); full production HA (rolling deploys, multi-AZ, etc.) is a later phase (ADR-005).
 6. **Anchoring cadence** — choose the sealing/anchoring interval that bounds the acceptable
    undetected-tampering window (open domain question, Baseline 6); consider a second TSA.
 

@@ -11,6 +11,8 @@ import com.gridveritas.core.repository.AttestationRepository;
 import com.gridveritas.core.repository.MerkleLeafRepository;
 import com.gridveritas.core.repository.MerkleRootRepository;
 import com.gridveritas.core.web.dto.ProofResponse;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,14 +41,30 @@ public class MerkleService {
 
     private static final Logger log = LoggerFactory.getLogger(MerkleService.class);
 
+    /**
+     * Arbitrary fixed key for the sealing job's Postgres advisory lock - only
+     * needs to be a constant unique to this lock's purpose, not derived from
+     * anything. See sealNewLeaves() (ADR-013: multi-instance leader election).
+     */
+    private static final long SEAL_LOCK_KEY = 928374651L;
+
     private final AttestationRepository attestationRepository;
     private final MerkleRootRepository merkleRootRepository;
     private final MerkleLeafRepository merkleLeafRepository;
     private final AnchorRepository anchorRepository;
     private final TsaVerifier tsaVerifier;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     @Value("${gridveritas.merkle.max-batch:1000}")
     private int maxBatch;
+
+    // H2 (used under the test profile) has no pg_try_advisory_xact_lock - disabled
+    // there so the existing H2-backed test suite is unaffected; the Postgres-only
+    // leader-election behavior gets its own Testcontainers-backed test (ADR-013).
+    @Value("${gridveritas.merkle.leader-election-enabled:true}")
+    private boolean leaderElectionEnabled;
 
     public MerkleService(AttestationRepository attestationRepository,
                          MerkleRootRepository merkleRootRepository,
@@ -63,10 +81,30 @@ public class MerkleService {
     /**
      * Seal all currently unsealed leaves into one new root. Runs on a fixed delay
      * (default 60s; override with gridveritas.merkle.seal-interval-ms).
+     *
+     * With multiple instances (ADR-013), every instance's scheduler fires this on
+     * the same cadence - without coordination, two instances could both read the
+     * same "unsealed" batch and race to insert Merkle leaves for it (the
+     * uq_merkle_leaf_att constraint would reject the loser, but only after two
+     * different MerkleRoots were already created, one of them bogus/partial).
+     * pg_try_advisory_xact_lock makes only one instance actually proceed per
+     * cycle; it's transaction-scoped, so it releases automatically at commit or
+     * rollback - no manual unlock, no risk of leaking a lock across a pooled
+     * connection.
      */
     @Scheduled(fixedDelayString = "${gridveritas.merkle.seal-interval-ms:60000}")
     @Transactional
     public void sealNewLeaves() {
+        if (leaderElectionEnabled) {
+            boolean acquired = Boolean.TRUE.equals(entityManager
+                    .createNativeQuery("SELECT pg_try_advisory_xact_lock(:key)")
+                    .setParameter("key", SEAL_LOCK_KEY)
+                    .getSingleResult());
+            if (!acquired) {
+                return; // another instance is sealing this cycle
+            }
+        }
+
         List<Attestation> batch =
                 attestationRepository.findUnsealed(PageRequest.of(0, maxBatch));
         if (batch.isEmpty()) {

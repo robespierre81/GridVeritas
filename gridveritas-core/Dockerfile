@@ -45,8 +45,8 @@ WORKDIR /app
 # Copy the built JAR
 COPY --from=build /workspace/app.jar app.jar
 
-# Ownership
-RUN chown gridveritas:gridveritas app.jar
+# Ownership. /app/operator holds the M13 federation key (named volume).
+RUN mkdir -p /app/operator && chown -R gridveritas:gridveritas /app /app/operator
 
 USER gridveritas
 

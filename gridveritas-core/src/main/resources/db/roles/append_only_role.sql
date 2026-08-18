@@ -16,9 +16,12 @@ BEGIN
         CREATE ROLE gridveritas_app LOGIN PASSWORD 'CHANGE_ME';
     END IF;
 END$$;
-
 GRANT CONNECT ON DATABASE gridveritas TO gridveritas_app;
 GRANT USAGE   ON SCHEMA public        TO gridveritas_app;
+
+-- Heartbeat table for multi-instance HA (needs UPDATE for last_heartbeat_at)
+GRANT SELECT, INSERT, UPDATE ON instance_heartbeat TO gridveritas_app;
+
 
 -- Append-only tables: SELECT + INSERT only (no UPDATE, no DELETE)
 GRANT SELECT, INSERT ON attestations  TO gridveritas_app;

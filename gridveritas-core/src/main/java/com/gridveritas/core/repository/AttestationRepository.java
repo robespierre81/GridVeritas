@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,6 +16,11 @@ import java.util.UUID;
 public interface AttestationRepository extends JpaRepository<Attestation, UUID> {
 
     List<Attestation> findBySourceIdOrderByTimestampDesc(UUID sourceId);
+
+    List<Attestation> findBySourceIdInOrderByTimestampDesc(Collection<UUID> sourceIds);
+
+    List<Attestation> findBySourceIdInAndTimestampGreaterThanEqualAndTimestampLessThanOrderByTimestampAsc(
+            Collection<UUID> sourceIds, Instant periodStart, Instant periodEnd);
 
     Optional<Attestation> findByPayloadHash(String payloadHash);
 

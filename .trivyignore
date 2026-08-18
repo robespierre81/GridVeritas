@@ -1,0 +1,13 @@
+# Reviewed CRITICAL findings, accepted temporarily pending a Spring Boot upgrade.
+# Each entry: justification + owner + re-check date. Remove once a compatible fixed
+# release is in use. This file is honored by the CI gating scan.
+
+# tomcat-embed-core (transitive via Spring Boot). Fixed upstream in 10.1.55 / 11.0.22.
+# Not reachable without HTTP/2 upgrade traffic in our setup; accepted pending Boot bump.
+# owner: Oliver Bodemer  accepted: 2026-08-11  re-check: 2026-09-11
+CVE-2026-41293
+
+# spring-security-web. Fix requires spring-security 6.5.9 / 7.0.4 (Spring Boot 3.5.x).
+# accepted pending framework upgrade to the current 3.x line.
+# owner: Oliver Bodemer  accepted: 2026-08-11  re-check: 2026-09-11
+CVE-2026-22732

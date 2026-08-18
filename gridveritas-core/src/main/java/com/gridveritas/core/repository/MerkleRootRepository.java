@@ -15,6 +15,8 @@ public interface MerkleRootRepository extends JpaRepository<MerkleRoot, UUID> {
 
     Optional<MerkleRoot> findTopByOrderByComputedAtDesc();
 
+    List<MerkleRoot> findAllByOrderByComputedAtDesc(Pageable pageable);
+
     /** Roots that do not yet have an external anchor, oldest first. */
     @Query("select r from MerkleRoot r "
             + "where r.id not in (select a.root.id from Anchor a) "

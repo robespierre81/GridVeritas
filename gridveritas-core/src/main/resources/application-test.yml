@@ -20,6 +20,13 @@ gridveritas:
   ai:
     ollama:
       enabled: false
+  merkle:
+    # H2 has no pg_try_advisory_xact_lock (ADR-013's leader-election mechanism
+    # is Postgres-specific) - disabled here so sealNewLeaves() behaves as it
+    # always has under the H2-backed test suite.
+    leader-election-enabled: false
+  federation:
+    fetch-enabled: false
   security:
     jwt:
       secret: test-secret-value-for-context-loading-only

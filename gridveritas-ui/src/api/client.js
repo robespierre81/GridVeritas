@@ -34,5 +34,22 @@ export const api = {
   listAnomalies: (sourceId) => request(sourceId ? `/anomalies?sourceId=${sourceId}` : '/anomalies'),
   askAudit: (question) => request('/audit/ask', { method: 'POST', body: JSON.stringify({ question }) }),
   listAuditLog: () => request('/audit'),
-  listVerifications: () => request('/audit/verifications')
+  listVerifications: () => request('/audit/verifications'),
+  getStats: () => request('/stats'),
+  listInstances: () => request('/cluster/instances'),
+  federationInfo: () => request('/federation/info'),
+  federationRoots: (limit) => request(`/federation/roots${limit ? `?limit=${limit}` : ''}`),
+  listFederationPeers: () => request('/federation/peers'),
+  addFederationPeer: (body) => request('/federation/peers', { method: 'POST', body: JSON.stringify(body) }),
+  fetchFederationPeer: (id) => request(`/federation/peers/${id}/fetch`, { method: 'POST' }),
+  listPeerRoots: (limit) => request(`/federation/peer-roots?limit=${limit || 50}`),
+  settlementMapping: () => request('/settlements/mapping'),
+  listAggregators: () => request('/aggregators'),
+  createAggregator: (body) => request('/aggregators', { method: 'POST', body: JSON.stringify(body) }),
+  listDerResources: () => request('/resources'),
+  createDerResource: (body) => request('/resources', { method: 'POST', body: JSON.stringify(body) }),
+  listResourceAttestations: (id) => request(`/resources/${id}/attestations`),
+  listSettlements: () => request('/settlements'),
+  createSettlement: (body) => request('/settlements', { method: 'POST', body: JSON.stringify(body) }),
+  getSettlement: (id) => request(`/settlements/${id}`)
 }
