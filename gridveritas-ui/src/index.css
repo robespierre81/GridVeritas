@@ -38,6 +38,15 @@ label { display: block; font-weight: 600; margin-bottom: 0.25rem; font-size: 0.9
 .sidebar {
   width: 220px; background: #1F4E79; color: #fff; padding: 1.5rem 1rem; flex-shrink: 0;
 }
+.consent-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+  padding: 12px 18px; background: #fff; border-top: 1px solid #c5cdd8;
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.08);
+}
+.consent-bar p { font-size: 0.9rem; max-width: 48rem; }
+.consent-bar__actions { display: flex; gap: 8px; }
+.btn-secondary { background: #fff; color: #1F4E79; border: 1px solid #c5cdd8; }
 .sidebar h1 { font-size: 1.2rem; margin-bottom: 1.5rem; }
 .sidebar nav a {
   display: block; color: #c5d8ec; padding: 0.5rem 0.75rem; border-radius: 6px; margin-bottom: 0.25rem;

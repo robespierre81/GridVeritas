@@ -10,6 +10,7 @@ import AuditTrailPage from './pages/AuditTrailPage'
 import FederationPage from './pages/FederationPage'
 import SettlementPage from './pages/SettlementPage'
 import LoginPanel from './components/LoginPanel'
+import VisitorConsent from './components/VisitorConsent'
 
 export default function App() {
   return (
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="/audit" element={<AuditPage />} />
         </Routes>
       </main>
+      <VisitorConsent />
     </div>
   )
 }
